@@ -1,0 +1,134 @@
+started with varaibles.tf file in my k8s-terraform:
+
+############################
+Creating The Credentials #
+############################
+
+export AWS_ACCESS_KEY_ID=[...]
+export AWS_SECRET_ACCESS_KEY=[...]
+export AWS_REGION=ap-south-1
+
+or else we can do AWS configure to store the credentials
+
+terraform apply
+terraform init
+terraform apply 
+
+#########################################
+Storing The State In A Remote Backend #
+#########################################
+
+first you should give access to s3 for your iam user: for that i created a s3-full-access-policy.json
+
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "s3:*",
+      "Resource": "*"
+    }
+  ]
+}
+save it and attach this to your user ..first create a policy and then attach it 
+aws iam create-policy \
+  --policy-name S3FullAccessPolicy \
+  --policy-document file://s3-full-access-policy.json
+
+aws iam attach-user-policy \
+  --user-name your-iam-user-name \
+  --policy-arn arn:aws:iam::your-account-id:policy/S3FullAccessPolicy
+
+to keep the bucket as a private i have created a bucket policy and i attached to that bucket
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::350515911022:user/chay"
+      },
+      "Action": "s3:*",
+      "Resource": [
+        "arn:aws:s3:::chayram",
+        "arn:aws:s3:::chayram/*"
+      ]
+    }
+  ]
+}
+
+aws s3api put-bucket-policy --bucket chayram --policy file://bucket-policy.json
+this command will attach with our bucket and the objects will be in private
+
+cat terraform.tfstate 
+cat storage.tf
+terraform apply
+aws s3api list-buckets
+terraform show
+
+cat terraform.tfstate
+cat backend.tf
+now..you should change the bucket name in the storage file.because the bucket name should be unique
+terraform apply--it will not work
+terraform init
+terraform apply
+
+##############################
+Creating The Control Plane #
+##############################
+cat k8s-control-plane.tf
+export the release versions of the k8s so that while doing terraform apply you can run directly :
+terraform refresh \
+    --var k8s_version=$K8S_VERSION \
+    --var release_version=$RELEASE_VERSION
+terraform output cluster_name
+this is main:
+export KUBECONFIG=$PWD/kubeconfig
+aws eks update-kubeconfig \
+    --name \
+    $(terraform output cluster_name) \
+    --region \
+    $(terraform output region)
+this command will update the creds and it will talk with eksctl
+///in our place it will be shown a kubeconfig file ...for reference purpose i kept it in my folder see it!!!
+kubectl get nodes --this command should show : no resources found in default namespace
+
+//for this you must be installed the latest version of aws cli
+//for this you must be installed the latest version of kubectl
+//for this you must be installed the latest version of eksctl
+//and terraform also
+
+#########################
+Creating Worker Nodes #
+#########################
+
+
+terraform apply \
+    --var k8s_version=$K8S_VERSION
+dont go with release version it has some issue give only the k8s version i.e 1.28
+
+
+#########################
+Upgrading The Cluster #
+#########################
+
+kubectl version --output yaml
+export K8S_VERSION=[...] # e.g., 1.16
+terraform apply \
+    --var k8s_version=$K8S_VERSION 
+
+kubectl version --output yaml
+
+
+############################
+Destroying The Resources #
+############################
+
+terraform destroy \
+    --var k8s_version=$K8S_VERSION 
+
+
+
+
+
+

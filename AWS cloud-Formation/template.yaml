@@ -1,0 +1,9 @@
+
+
+Resources:
+  ec2Instance:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      ImageId: ami-0287a05f0ef0e9d9a
+      InstanceType: t2.micro
+      KeyName: cf-testkey

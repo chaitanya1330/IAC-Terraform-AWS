@@ -1,0 +1,357 @@
+# AWSTemplateFormation: "2010-09-09"
+# Description: >-
+# Template descreibes creation of vpc , subnets, route tables and so on...
+Parameters:
+  InstanceTypeParameter:
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+      - t2.micro
+      - m1.small
+      - m1.large
+    Description: Enter t2.micro, m1.small, or m1.large. Default is t2.micro.  
+    
+  VpcCIDR:
+    Type: String
+    Default: 10.0.0.0/16
+    Description: Please enter VPC CIDR 
+  
+  PublicSubnet1CIDR:
+    Type: String
+    Default: 10.0.1.0/24
+    Description: Please enter CIDR for subnet
+
+  PublicSubnet2CIDR:
+    Type: String
+    Default: 10.0.2.0/24
+    Description: Please enter CIDR for subnet
+
+  PrivateSubnet1CIDR:
+    Type: String
+    Default: 10.0.3.0/24
+    Description: Please enter CIDR for subnet
+  
+  PrivateSubnet2CIDR:
+    Type: String
+    Default: 10.0.4.0/24
+    Description: Please enter CIDR for subnet
+
+Resources:
+  myVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 
+        Ref: VpcCIDR
+      EnableDnsHostnames: 'true'
+      EnableDnsSupport: 'true'
+      Tags:
+        - Key: Name
+          Value: CloudFormation-VPC
+  
+
+
+  InternetGateway:
+    Type: 'AWS::EC2::InternetGateway'
+    Properties:
+      Tags: 
+        - Key: Name
+          Value: CloudFormation-IGW
+
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId:
+       Ref: InternetGateway
+      VpcId: 
+        Ref: myVPC
+
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: 
+        Ref: myVPC
+      AvailabilityZone: ap-south-1a
+      CidrBlock: 
+        Ref: PublicSubnet1CIDR
+      MapPublicIpOnLaunch: true
+      Tags: 
+        - Key: Name
+          Value: CloudFormation-PublicSubnet1
+      
+ 
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: 
+        Ref: myVPC
+      AvailabilityZone: ap-south-1a
+      CidrBlock: 
+        Ref: PublicSubnet2CIDR
+      MapPublicIpOnLaunch: true
+      Tags: 
+        - Key: Name
+          Value: CloudFormation-PublicSubnet2
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: 
+        Ref: myVPC
+      AvailabilityZone: ap-south-1b
+      CidrBlock: 
+        Ref: PrivateSubnet1CIDR
+      MapPublicIpOnLaunch: false
+      Tags: 
+        - Key: Name
+          Value: CloudFormation-PrivateSubnet1
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: 
+        Ref: myVPC
+      AvailabilityZone: ap-south-1b
+      CidrBlock: 
+        Ref: PrivateSubnet2CIDR
+      MapPublicIpOnLaunch: false
+      Tags: 
+        - Key: Name
+          Value: CloudFormation-PrivateSubnet2
+
+
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: 
+        Ref: myVPC
+      Tags: 
+        - Key: Name
+          Value: CloudFormation-Public-RouteTable
+
+
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment 
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: 
+        Ref: InternetGateway
+      RouteTableId: 
+        Ref: PublicRouteTable
+      
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: 
+        Ref: PublicRouteTable
+      SubnetId: 
+        Ref: PublicSubnet1
+
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: 
+        Ref: PublicRouteTable
+      SubnetId: 
+        Ref: PublicSubnet2
+
+
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow http to client host
+      VpcId: 
+        Ref: myVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+
+
+
+  NATGatewayEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: myVPC
+
+  NATGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+        AllocationId: !GetAtt NATGatewayEIP.AllocationId
+        SubnetId: 
+          Ref: PublicSubnet1
+        Tags:
+        - Key: Name
+          Value: CloudFormation-NGW
+
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: 
+        Ref: myVPC
+      Tags: 
+        - Key: Name
+          Value: CloudFormation-Private-RouteTable
+
+
+  RouteNATGateway:
+   DependsOn: NATGateway
+   Type: AWS::EC2::Route
+   Properties:
+      RouteTableId: 
+        Ref: PrivateRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: 
+        Ref: NATGateway
+
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: 
+        Ref: PrivateRouteTable
+      SubnetId: 
+        Ref: PrivateSubnet1
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: 
+        Ref: PrivateRouteTable
+      SubnetId: 
+        Ref: PrivateSubnet2
+
+
+  Ec2Instance: 
+    Type: AWS::EC2::Instance
+    Properties: 
+      ImageId: ami-036cd2042682e550f
+      InstanceType: 
+       Ref: InstanceTypeParameter
+      KeyName: "cloud-formation-key"
+      SecurityGroupIds:
+      - Ref: InstanceSecurityGroup
+      SubnetId: 
+        Ref: PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: CloudFormation-Ec2-instance
+
+
+
+  Ec2PrivateInstance: 
+    Type: AWS::EC2::Instance
+    Properties: 
+      ImageId: ami-036cd2042682e550f
+      InstanceType: 
+       Ref: InstanceTypeParameter
+      KeyName: "cloud-formation"
+      SecurityGroupIds:
+        - Ref: InstanceSecurityGroup     
+      SubnetId: 
+        Ref: PrivateSubnet1
+      Tags:
+          - Key: Name
+            Value: CloudFormation-Ec2-Privateinstance
+
+
+
+Outputs:
+  StackVPC:
+    Description: The ID of the VPC
+    Value: !
+      Ref: myVPC
+    Export:
+      Name: myVPC
+
+  PublicInstanceID:
+    Description: The Public Instance ID
+    Value: 
+      Ref: Ec2Instance
+    Export:
+      Name: PublicInstanceID
+  
+  PrivateInstanceID:
+    Description: The Private Instance ID
+    Value: 
+      Ref: Ec2PrivateInstance
+    Export:
+      Name: PrivateInstanceID
+
+  PublicSubnet1ID:
+    Description: The Public Subnet ID
+    Value: 
+      Ref: PublicSubnet1
+    Export:
+      Name: PublicSubnet1-Output-ID
+
+  PublicSubnet2ID:
+    Description: The Second Public Subnet ID
+    Value: 
+      Ref: PublicSubnet2
+    Export:
+      Name: PublicSubnet2-Output-ID
+
+  PrivateSubnet1ID:
+    Description: The Private Subnet ID
+    Value: 
+      Ref: PrivateSubnet1
+    Export:
+      Name: PrivateSubnet1-Output-ID
+
+  PrivateSubnet2ID:
+    Description: The Second Private Subnet ID
+    Value: 
+      Ref: PrivateSubnet2
+    Export:
+      Name: PrivateSubnet2-Output-ID
+
+  InternetGatewayID:
+    Description: The InternetGateway ID
+    Value: 
+      Ref: InternetGateway
+    Export:
+      Name: InternetGateway-Output-ID
+
+  PublicRouteTableID:
+    Description: The PublicRouteTable ID
+    Value: 
+      Ref: PublicRouteTable
+    Export:
+      Name: PublicRouteTable-Output-ID
+
+  PrivateRouteTableID:
+    Description: The PrivateRouteTable ID
+    Value: 
+      Ref: PrivateRouteTable
+    Export:
+      Name: PrivateRouteTable-Output-ID
+
+  NATGatewayID:
+    Description: The NATGateway ID
+    Value: 
+      Ref: NATGateway
+    Export:
+      Name: NATGateway-Output-ID
+
+  SecurityGroupyID:
+    Description: The SecurityGroup ID
+    Value: 
+      Ref: InstanceSecurityGroup
+    Export:
+      Name: SecurityGroup-Output-ID
+
+
+
+  
